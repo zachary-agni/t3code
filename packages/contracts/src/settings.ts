@@ -830,6 +830,11 @@ export const ClaudeSettings = makeProviderSettingsSchema(
         },
       }),
     ),
+    // Mod folders loaded as plugin dirs on every launch; Settings draws its own list.
+    mods: Schema.Array(TrimmedNonEmptyString).pipe(
+      Schema.withDecodingDefault(Effect.succeed([])),
+      Schema.annotateKey({ providerSettingsForm: { hidden: true } }),
+    ),
     autoCompactWindow: TrimmedString.check(
       Schema.isPattern(CLAUDE_AUTO_COMPACT_WINDOW_PATTERN),
     ).pipe(

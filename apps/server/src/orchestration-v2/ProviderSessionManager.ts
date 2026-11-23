@@ -2,7 +2,9 @@ import { AgentScope } from "@t3tools/shared/AgentScope";
 import * as KeyedLock from "@t3tools/shared/KeyedLock";
 import { resolveProjectSettings } from "@t3tools/shared/projectSettings";
 import {
+  type ClaudeModUiState,
   CommandId,
+  EMPTY_CLAUDE_MOD_UI_STATE,
   isOrchestrationV2WorkActive,
   ModelSelection,
   type OrchestrationV2AppThread,
@@ -317,6 +319,8 @@ export interface ProviderSessionManagerV2Shape {
   readonly subscribePromptSuggestion: (
     threadId: ThreadId,
   ) => Stream.Stream<OrchestrationV2PromptSuggestion>;
+  /** The thread's Claude mod panes while its session runs; empty otherwise. */
+  readonly subscribeClaudeMods: (threadId: ThreadId) => Stream.Stream<ClaudeModUiState>;
 }
 
 export class ProviderSessionManagerV2 extends Context.Service<
@@ -482,6 +486,13 @@ export const layerWithOptions = (
       const commandOutput = yield* CommandOutputHub.CommandOutputHub;
       const promptSuggestionStore = yield* SubscriptionRef.make<
         ReadonlyMap<ThreadId, NonNullable<OrchestrationV2PromptSuggestion>>
+      >(new Map());
+      // Entries live until their session closes.
+      const claudeModStore = yield* SubscriptionRef.make<
+        ReadonlyMap<
+          ThreadId,
+          { readonly providerSessionId: ProviderSessionId; readonly state: ClaudeModUiState }
+        >
       >(new Map());
       const idAllocator = yield* IdAllocator.IdAllocatorV2;
       const providerEventIngestor = yield* ProviderEventIngestor.ProviderEventIngestorV2;
@@ -3058,6 +3069,14 @@ export const layerWithOptions = (
                 return next;
               });
             }
+            if (nativeEvent.type === "claude_mods.updated") {
+              return SubscriptionRef.update(claudeModStore, (current) =>
+                new Map(current).set(nativeEvent.threadId, {
+                  providerSessionId: entry.runtime.providerSessionId,
+                  state: nativeEvent.state,
+                }),
+              );
+            }
             const tracked = retryStalls.track(nativeEvent);
             const event = tracked.event;
             const armRetryStall = retryStalls.update(tracked);
@@ -3202,6 +3221,18 @@ export const layerWithOptions = (
                 detail: makeProviderFailure({ cause }).message,
                 eventStreamCause: cause,
               }).pipe(logReleaseFailure(entry.runtime.providerSessionId));
+            }),
+          ),
+          // A closed session draws no mod panes, whichever way it ended.
+          Effect.ensuring(
+            SubscriptionRef.update(claudeModStore, (current) => {
+              const owned = [...current].filter(
+                ([, mods]) => mods.providerSessionId === entry.runtime.providerSessionId,
+              );
+              if (owned.length === 0) return current;
+              const next = new Map(current);
+              for (const [threadId] of owned) next.delete(threadId);
+              return next;
             }),
           ),
           Effect.forkIn(layerScope),
@@ -3737,6 +3768,11 @@ export const layerWithOptions = (
                     Effect.orElseSucceed(() => null),
                   ),
             ),
+            Stream.changes,
+          ),
+        subscribeClaudeMods: (threadId) =>
+          SubscriptionRef.changes(claudeModStore).pipe(
+            Stream.map((mods) => mods.get(threadId)?.state ?? EMPTY_CLAUDE_MOD_UI_STATE),
             Stream.changes,
           ),
       } satisfies ProviderSessionManagerV2Shape);

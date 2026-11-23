@@ -37,6 +37,9 @@ const DevicePanel = lazy(() =>
   import("../device/DevicePanel").then((module) => ({ default: module.DevicePanel })),
 );
 const FilePreviewPanel = lazy(() => import("../files/FilePreviewPanel"));
+const ClaudeModsPanel = lazy(() =>
+  import("../claudeMods/ClaudeModsPanel").then((module) => ({ default: module.ClaudeModsPanel })),
+);
 
 type RightPanelTerminalProps = Omit<
   PersistentThreadTerminalPanelProps,
@@ -266,6 +269,12 @@ export function RightPanelSurfaceContent(props: {
               useRightPanelStore.getState().show(threadRef);
             }}
           />
+        </Suspense>
+      );
+    case "mods":
+      return (
+        <Suspense fallback={null}>
+          <ClaudeModsPanel threadRef={threadRef} />
         </Suspense>
       );
     case "files":

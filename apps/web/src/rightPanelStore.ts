@@ -26,6 +26,7 @@ const RIGHT_PANEL_KINDS = [
   "file",
   "preview",
   "device",
+  "mods",
   "terminal",
   "pull-request",
   "pull-requests",
@@ -57,6 +58,8 @@ export type RightPanelSurface =
       splitDirection?: "horizontal" | "vertical";
     }
   | { id: "diff"; kind: "diff" }
+  /** The thread's Claude Code mod panes; which pane shows is the panel's own tab strip. */
+  | { id: "mods"; kind: "mods" }
   | {
       id: "files";
       kind: "files";
@@ -299,6 +302,8 @@ const singletonSurface = (
       return { id: "pull-requests", kind };
     case "device":
       return { id: "device", kind };
+    case "mods":
+      return { id: "mods", kind };
   }
 };
 

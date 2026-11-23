@@ -686,6 +686,7 @@ export const layer: Layer.Layer<
             case "background_work.lost":
             case "command_output.delta":
             case "prompt_suggestion.updated":
+            case "claude_mods.updated":
               // The session manager handles these before ingestion.
               return [];
             case "turn.terminal":

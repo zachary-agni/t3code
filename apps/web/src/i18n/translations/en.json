@@ -12795,5 +12795,19 @@
   "99d51127f573296b": "Another account",
   "8ec2c57414669b79": "Connect a second {tracker} workspace or user.",
   "99963c0142e17f00": "For the new {tracker} account.",
-  "6d8e4ebc889bace9": "Add account"
+  "6d8e4ebc889bace9": "Add account",
+  "e2bbac79ef814108": "Hide mod panes",
+  "cddfc3da82412909": "Show mod panes",
+  "26b4d273785a789c": "Mod panes",
+  "55cc0690c1cb5a22": "Panes drawn by this thread's Claude Code mods.",
+  "67312fa6f416649d": "Toggle mod panes",
+  "65dc2b63555fc20f": "No mod panes open in this thread",
+  "5fd99753f7cb2e33": "Mods open panes when they run. Enable mods in Settings → Providers → Claude.",
+  "7d8cef0f8d6111e6": "This pane has nothing to show yet.",
+  "0baf559beb441dd9": "Not supported in T3 Code",
+  "1d9a4fc8f129b744": "Mod input",
+  "109d735255ce09d8": "Mod choice",
+  "194f0504129e1c6d": "Mods",
+  "1ae19d6ec34ac33c": "Claude Code mods can draw panes beside the chat. Changes apply to new Claude sessions.",
+  "98ab7ca8ded503f3": "No mods found in ~/.claude/mods or ~/.claude/dev-mods."
 }

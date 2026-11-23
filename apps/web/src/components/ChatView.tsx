@@ -327,6 +327,7 @@ import {
   ThreadPanelHeaderControl,
   WorkspaceTitlebarControls,
 } from "./chat/PanelLayoutControls";
+import { useClaudeModPanes } from "./claudeMods/useClaudeModPanes";
 import type { ExpandedImagePreview } from "./chat/ExpandedImagePreview";
 import { ThreadDetailsPanel } from "./chat/ThreadDetailsPanel";
 import { NoActiveThreadState } from "./NoActiveThreadState";
@@ -2550,6 +2551,12 @@ export default function ChatView(props: ChatViewProps) {
     closeRightPanelSurface,
   });
   const pullRequestSurfaceAvailable = supportsPullRequests && pullRequestPanelTarget !== null;
+  const modPanesOpen = activeRightPanelSurface?.kind === "mods";
+  const modPanes = useClaudeModPanes({
+    threadRef: activeThreadRef,
+    enabled: !embedded && isServerThread && selectedProvider === "claudeAgent",
+    modsVisible: modPanesOpen,
+  });
   const {
     acknowledgeActiveThreadWoke,
     activeBranchMismatchKey,
@@ -3481,6 +3488,8 @@ export default function ChatView(props: ChatViewProps) {
     onToggleTerminal: toggleTerminalVisibilityStable,
     onToggleThreadPanel: toggleThreadPanelStable,
     onToggleRightPanel: toggleRightPanelStable,
+    modPanesOpen,
+    onToggleModPanes: modPanes.hasPanes ? modPanes.toggle : undefined,
   } satisfies PanelLayoutControlsProps;
   const panelToggleControls = (
     <PanelLayoutControls
@@ -4243,6 +4252,7 @@ export default function ChatView(props: ChatViewProps) {
           onAddPullRequests={addPullRequestsSurfaceStable}
           onAddDevice={addDeviceSurfaceStable}
           onAddSideChat={sideChatsOffered ? openSideChatStable : undefined}
+          onAddMods={modPanes.hasPanes ? modPanes.open : undefined}
           browserAvailable={canOperatePreview && browserAvailable}
           terminalAvailable={activeProject !== null && canOperateTerminal}
           diffAvailable={isServerThread && diffAvailable}

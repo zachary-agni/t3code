@@ -591,6 +591,10 @@
       "types": "./src/state/mcpApps.ts",
       "default": "./src/state/mcpApps.ts"
     },
+    "./state/claude-mods": {
+      "types": "./src/state/claudeMods.ts",
+      "default": "./src/state/claudeMods.ts"
+    },
     "./source-control-clients": {
       "types": "./src/sourceControlClients.ts",
       "default": "./src/sourceControlClients.ts"

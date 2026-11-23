@@ -1,4 +1,5 @@
 import {
+  BlocksIcon,
   PanelBottomIcon,
   PanelRightIcon,
   SquareMenuIcon,
@@ -37,6 +38,9 @@ export interface PanelLayoutControlsProps {
   onToggleTerminal: () => void;
   onToggleThreadPanel: () => void;
   onToggleRightPanel: () => void;
+  /** Shown beside the right panel toggle only while the thread has mod panes. */
+  modPanesOpen?: boolean;
+  onToggleModPanes?: (() => void) | undefined;
 }
 
 export const PanelLayoutControls = memo(function PanelLayoutControls({
@@ -57,6 +61,8 @@ export const PanelLayoutControls = memo(function PanelLayoutControls({
   onToggleTerminal,
   onToggleThreadPanel,
   onToggleRightPanel,
+  modPanesOpen = false,
+  onToggleModPanes,
 }: PanelLayoutControlsProps) {
   const gt = useGT();
   const threadPanelToggle = (
@@ -116,6 +122,24 @@ export const PanelLayoutControls = memo(function PanelLayoutControls({
                 : gt("Toggle terminal drawer")
               : gt("Terminal drawer is unavailable")}
           </TooltipPopup>
+        </Tooltip>
+      ) : null}
+      {showRightPanelControl && onToggleModPanes ? (
+        <Tooltip>
+          <TooltipTrigger render={<span className="flex shrink-0" />}>
+            <Toggle
+              className="shrink-0 [-webkit-app-region:no-drag]"
+              pressed={modPanesOpen}
+              onPressedChange={onToggleModPanes}
+              aria-label={gt("Toggle mod panes")}
+              data-mod-panes-toggle
+              variant="ghost"
+              size="sm"
+            >
+              <BlocksIcon className="size-4" />
+            </Toggle>
+          </TooltipTrigger>
+          <TooltipPopup side="bottom">{gt("Toggle mod panes")}</TooltipPopup>
         </Tooltip>
       ) : null}
       {showRightPanelControl ? (

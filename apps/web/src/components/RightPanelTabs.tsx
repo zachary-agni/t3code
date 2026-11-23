@@ -40,6 +40,7 @@ import { restrictToFirstScrollableAncestor, restrictToHorizontalAxis } from "@dn
 import { horizontalListSortingStrategy, SortableContext, useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import {
+  Blocks,
   Bot,
   CircleDotIcon,
   Smartphone,
@@ -159,6 +160,8 @@ export interface RightPanelTabsProps {
   onAddDevice: () => void;
   /** Absent where side chats are not offered. */
   onAddSideChat?: (() => void) | undefined;
+  /** Present only while the thread has Claude Code mod panes. */
+  onAddMods?: (() => void) | undefined;
   browserAvailable: boolean;
   terminalAvailable: boolean;
   diffAvailable: boolean;
@@ -345,6 +348,8 @@ function RightPanelEmptyState(props: {
   onAddDevice: () => void;
   /** Absent where side chats are not offered. */
   onAddSideChat?: (() => void) | undefined;
+  /** Present only while the thread has Claude Code mod panes. */
+  onAddMods?: (() => void) | undefined;
   browserAvailable: boolean;
   terminalAvailable: boolean;
   diffAvailable: boolean;
@@ -417,6 +422,19 @@ function RightPanelEmptyState(props: {
       disabledReason: messages(SURFACE_UNAVAILABLE_HINTS.device),
       onClick: props.onAddDevice,
     },
+    ...(props.onAddMods
+      ? [
+          {
+            label: msg("Mod panes"),
+            description: msg("Panes drawn by this thread's Claude Code mods."),
+            icon: Blocks,
+            shortcut: "O",
+            available: true,
+            disabledReason: "",
+            onClick: props.onAddMods,
+          },
+        ]
+      : []),
     ...(props.onAddSideChat
       ? [
           {
@@ -622,6 +640,8 @@ function surfaceTitle(
       return /^\d+$/.test(surface.key) ? `#${surface.key}` : surface.key;
     case "device":
       return surface.title ?? surface.target?.name ?? resolve(msg("Device"));
+    case "mods":
+      return resolve(msg("Mod panes"));
     case "thread":
       // Until the thread's own title loads.
       return resolve(msg("Thread"));
@@ -724,6 +744,8 @@ function SurfaceIcon({
       return <SideChatTabIcon environmentId={environmentId} threadId={surface.threadId} />;
     case "linked-thread":
       return <MessagesSquare className="size-3 shrink-0" />;
+    case "mods":
+      return <Blocks className="size-3 shrink-0" />;
     case "device":
       return surface.target?.platform === "ios" ? (
         <AppleIcon className="size-3 shrink-0" />
@@ -1259,6 +1281,18 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
       disabledReason: messages(SURFACE_DISABLED_REASONS.device),
       onClick: props.onAddDevice,
     },
+    ...(props.onAddMods
+      ? [
+          {
+            label: msg("Mod panes"),
+            icon: Blocks,
+            shortcut: "O",
+            available: true,
+            disabledReason: "",
+            onClick: props.onAddMods,
+          },
+        ]
+      : []),
     ...(props.onAddSideChat
       ? [
           {
@@ -1693,6 +1727,7 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
             onAddPullRequests={props.onAddPullRequests}
             onAddDevice={props.onAddDevice}
             onAddSideChat={props.onAddSideChat}
+            onAddMods={props.onAddMods}
             browserAvailable={props.browserAvailable}
             terminalAvailable={props.terminalAvailable}
             diffAvailable={props.diffAvailable}

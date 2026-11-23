@@ -12786,5 +12786,19 @@
   "99d51127f573296b": "Weiteres Konto",
   "8ec2c57414669b79": "Verbinde einen zweiten {tracker}-Workspace oder -Nutzer.",
   "99963c0142e17f00": "Für das neue {tracker}-Konto.",
-  "6d8e4ebc889bace9": "Konto hinzufügen"
+  "6d8e4ebc889bace9": "Konto hinzufügen",
+  "e2bbac79ef814108": "Mod-Bereiche ausblenden",
+  "cddfc3da82412909": "Mod-Bereiche anzeigen",
+  "26b4d273785a789c": "Mod-Bereiche",
+  "55cc0690c1cb5a22": "Bereiche, die die Claude Code-Mods dieses Threads zeichnen.",
+  "67312fa6f416649d": "Mod-Bereiche umschalten",
+  "65dc2b63555fc20f": "In diesem Thread sind keine Mod-Bereiche geöffnet",
+  "5fd99753f7cb2e33": "Mods öffnen Bereiche, wenn sie laufen. Aktiviere Mods unter Einstellungen → Anbieter → Claude.",
+  "7d8cef0f8d6111e6": "Dieser Bereich zeigt noch nichts an.",
+  "0baf559beb441dd9": "In T3 Code nicht unterstützt",
+  "1d9a4fc8f129b744": "Mod-Eingabe",
+  "109d735255ce09d8": "Mod-Auswahl",
+  "194f0504129e1c6d": "Mods",
+  "1ae19d6ec34ac33c": "Claude Code-Mods können Bereiche neben dem Chat zeichnen. Änderungen gelten für neue Claude-Sitzungen.",
+  "98ab7ca8ded503f3": "Keine Mods in ~/.claude/mods oder ~/.claude/dev-mods gefunden."
 }

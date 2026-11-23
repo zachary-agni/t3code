@@ -592,6 +592,7 @@ export function routeProviderEvent(
     case "background_work.lost":
     case "command_output.delta":
     case "prompt_suggestion.updated":
+    case "claude_mods.updated":
       // The session manager handles these itself; runs never see them.
       return [false, state];
     case "turn.terminal":

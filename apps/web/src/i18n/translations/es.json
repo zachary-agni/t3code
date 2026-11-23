@@ -12781,5 +12781,19 @@
   "99d51127f573296b": "Otra cuenta",
   "8ec2c57414669b79": "Conecta un segundo espacio de trabajo o usuario de {tracker}.",
   "99963c0142e17f00": "Para la nueva cuenta de {tracker}.",
-  "6d8e4ebc889bace9": "Añadir cuenta"
+  "6d8e4ebc889bace9": "Añadir cuenta",
+  "e2bbac79ef814108": "Ocultar paneles de mods",
+  "cddfc3da82412909": "Mostrar paneles de mods",
+  "26b4d273785a789c": "Paneles de mods",
+  "55cc0690c1cb5a22": "Paneles que dibujan los mods de Claude Code de este hilo.",
+  "67312fa6f416649d": "Alternar paneles de mods",
+  "65dc2b63555fc20f": "No hay paneles de mods abiertos en este hilo",
+  "5fd99753f7cb2e33": "Los mods abren paneles cuando se ejecutan. Activa los mods en Ajustes → Proveedores → Claude.",
+  "7d8cef0f8d6111e6": "Este panel aún no tiene nada que mostrar.",
+  "0baf559beb441dd9": "No compatible con T3 Code",
+  "1d9a4fc8f129b744": "Entrada del mod",
+  "109d735255ce09d8": "Opción del mod",
+  "194f0504129e1c6d": "Mods",
+  "1ae19d6ec34ac33c": "Los mods de Claude Code pueden dibujar paneles junto al chat. Los cambios se aplican a las nuevas sesiones de Claude.",
+  "98ab7ca8ded503f3": "No se encontraron mods en ~/.claude/mods ni en ~/.claude/dev-mods."
 }

@@ -17,6 +17,14 @@ import {
   McpAppUpdateModelContextInput,
 } from "./mcpApps.ts";
 import {
+  ClaudeModActInput,
+  ClaudeModListInput,
+  ClaudeModListResult,
+  ClaudeModRequestError,
+  ClaudeModSubscribeInput,
+  ClaudeModUiState,
+} from "./claudeMods.ts";
+import {
   PeerLink,
   PeerLinkClientPairingInput,
   PeerLinkLinkPairingInput,
@@ -514,6 +522,10 @@ export const WS_METHODS = {
   mcpAppsToolInfo: "mcpApps.toolInfo",
   mcpAppsReadResource: "mcpApps.readResource",
   mcpAppsUpdateModelContext: "mcpApps.updateModelContext",
+
+  claudeModsSubscribe: "claudeMods.subscribe",
+  claudeModsAct: "claudeMods.act",
+  claudeModsList: "claudeMods.list",
 
   providerUploadFeedback: "provider.uploadFeedback",
   providerMcpSignInStart: "provider.mcpSignIn.start",
@@ -1790,6 +1802,24 @@ const WsMcpAppsReadResourceRpc = Rpc.make(WS_METHODS.mcpAppsReadResource, {
   error: Schema.Union([McpAppRequestError, EnvironmentAuthorizationError]),
 });
 
+const WsClaudeModsSubscribeRpc = Rpc.make(WS_METHODS.claudeModsSubscribe, {
+  payload: ClaudeModSubscribeInput,
+  success: ClaudeModUiState,
+  error: Schema.Union([ClaudeModRequestError, EnvironmentAuthorizationError]),
+  stream: true,
+});
+
+const WsClaudeModsActRpc = Rpc.make(WS_METHODS.claudeModsAct, {
+  payload: ClaudeModActInput,
+  error: Schema.Union([ClaudeModRequestError, EnvironmentAuthorizationError]),
+});
+
+const WsClaudeModsListRpc = Rpc.make(WS_METHODS.claudeModsList, {
+  payload: ClaudeModListInput,
+  success: ClaudeModListResult,
+  error: Schema.Union([ClaudeModRequestError, EnvironmentAuthorizationError]),
+});
+
 const WsProviderUploadFeedbackRpc = Rpc.make(WS_METHODS.providerUploadFeedback, {
   payload: ProviderUploadFeedbackInput,
   success: ProviderUploadFeedbackResult,
@@ -2637,6 +2667,9 @@ export const WsRpcGroup = RpcGroup.make(
   WsMcpAppsToolInfoRpc,
   WsMcpAppsReadResourceRpc,
   WsMcpAppsUpdateModelContextRpc,
+  WsClaudeModsSubscribeRpc,
+  WsClaudeModsActRpc,
+  WsClaudeModsListRpc,
   WsProviderUploadFeedbackRpc,
   WsProviderMcpSignInStartRpc,
   WsProviderMcpSignInCompleteRpc,

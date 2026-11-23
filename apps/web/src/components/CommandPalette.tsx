@@ -84,6 +84,7 @@ import {
   TextSearchIcon,
   UserPlusIcon,
   WorkflowIcon,
+  BlocksIcon,
 } from "lucide-react";
 import { openThreadFind } from "./chat/threadFindStore";
 import { dispatchPreviewAction } from "./preview/previewActionBus";
@@ -123,6 +124,7 @@ import { desktopLocalBackendId } from "../connection/desktopLocal";
 import { filesystemEnvironment, useFilesystemReadAccess } from "../state/filesystem";
 import { projectEnvironment } from "../state/projects";
 import { useEnvironmentQuery } from "../state/query";
+import { useClaudeModUi } from "../state/claudeMods";
 import { serverEnvironment } from "../state/server";
 import { threadEnvironment } from "../state/threads";
 import { readEnvironmentScope, useEnvironmentScope } from "~/state/session";
@@ -730,6 +732,14 @@ function OpenCommandPaletteDialog(props: {
   const activeThreadPreviewOpen = useRightPanelStore(
     (state) => selectActiveRightPanel(state.byThreadKey, previewPanelThreadRef) === "preview",
   );
+  const activeThreadModPanesOpen = useRightPanelStore(
+    (state) => selectActiveRightPanel(state.byThreadKey, previewPanelThreadRef) === "mods",
+  );
+  // Subscribed only while the palette is open; the thread view holds the same stream.
+  const activeThreadHasModPanes =
+    useClaudeModUi(
+      activeThread ? scopeThreadRef(activeThread.environmentId, activeThread.id) : null,
+    ).panes.length > 0;
   const supportsThreadFind =
     environments.find((environment) => environment.environmentId === activeThread?.environmentId)
       ?.serverConfig?.threadFind === true;
@@ -1533,6 +1543,20 @@ function OpenCommandPaletteDialog(props: {
       icon: <PullRequestGlyph.link className={ITEM_ICON_CLASS} />,
       run: async () => {
         useRightPanelStore.getState().open(threadRef, "pull-requests");
+      },
+    });
+  }
+
+  if (activeThread !== null && activeThreadHasModPanes) {
+    const threadRef = scopeThreadRef(activeThread.environmentId, activeThread.id);
+    actionItems.push({
+      kind: "action",
+      value: "action:toggle-mod-panes",
+      searchTerms: ["mods", "mod panes", "claude", "plugin", "pane"],
+      title: activeThreadModPanesOpen ? gt("Hide mod panes") : gt("Show mod panes"),
+      icon: <BlocksIcon className={ITEM_ICON_CLASS} />,
+      run: async () => {
+        useRightPanelStore.getState().toggle(threadRef, "mods");
       },
     });
   }

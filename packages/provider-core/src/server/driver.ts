@@ -1,5 +1,6 @@
 // Context tags are runtime singletons; drivers need multiple instances.
 import type {
+  ClaudeModInfo,
   ProviderConsumeResetCreditOutcome,
   AcpRegistryListSessionsResult,
   AcpRegistryListProvidersResult,
@@ -64,6 +65,8 @@ export interface ProviderInstance {
   readonly orchestrationAdapter: ProviderAdapter.ProviderAdapterV2["Service"];
   readonly textGeneration: ProviderTextGeneration;
   readonly auth?: ProviderAuthController;
+  /** Claude Code mod folders in the instance's Claude home. */
+  readonly listClaudeMods?: Effect.Effect<ReadonlyArray<ClaudeModInfo>>;
   readonly acpSessionManagement?: {
     readonly listSessions: (input: {
       readonly cwd: string;

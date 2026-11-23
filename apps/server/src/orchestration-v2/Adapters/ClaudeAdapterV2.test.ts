@@ -408,7 +408,7 @@ describe("ClaudeAdapterV2 runtime query policy", () => {
     assert.isUndefined(options.extraArgs?.["dangerously-skip-permissions"]);
   });
 
-  it("passes the thread's other folders and every --add-dir and --plugin-dir launch directory to Claude", () => {
+  it("passes the thread's other folders, every --add-dir and --plugin-dir launch directory, and enabled mods to Claude", () => {
     const options = ClaudeAdapterV2.makeClaudeQueryOptions({
       modelSelection: CLAUDE_TEST_MODEL_SELECTION,
       nativeThreadId: "native-add-dir",
@@ -419,6 +419,7 @@ describe("ClaudeAdapterV2 runtime query policy", () => {
         extraRoots: ["/repos/api"],
       },
       attachmentsDir: "/attachments",
+      mods: ["./a", "/mods/usage"],
       settings: {
         ...AUTO_COMPACT_CLAUDE_SETTINGS,
         launchArgs:
@@ -445,6 +446,7 @@ describe("ClaudeAdapterV2 runtime query policy", () => {
     assert.deepEqual(options.plugins, [
       { type: "local", path: "./a" },
       { type: "local", path: "./b.zip" },
+      { type: "local", path: "/mods/usage" },
     ]);
     assert.isUndefined(options.extraArgs?.["plugin-dir"]);
     const bare = ClaudeAdapterV2.makeClaudeQueryOptions({
@@ -3856,6 +3858,7 @@ describe("ClaudeAdapterV2 background wake turns", () => {
     readonly offer?: (message: SDKUserMessage) => Effect.Effect<void>;
     readonly promptSuggestions?: boolean;
     readonly routeModelCatalog?: ClaudeAdapterV2.ClaudeAdapterV2Options["routeModelCatalog"];
+    readonly uiRequest?: ClaudeAdapterV2.ClaudeAgentSdkQuerySession["uiRequest"];
   }) =>
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
@@ -4035,6 +4038,7 @@ describe("ClaudeAdapterV2 background wake turns", () => {
                 stopTask: options?.stopTask ?? (() => Effect.void),
                 interrupt: options?.interrupt ?? Effect.void,
                 close: options?.close?.(sdkMessages) ?? Effect.void,
+                ...(options?.uiRequest === undefined ? {} : { uiRequest: options.uiRequest }),
               };
             }),
           forkSession: options?.forkSession ?? (() => Effect.die("unused forkSession")),
@@ -17202,6 +17206,183 @@ describe("ClaudeAdapterV2 background wake turns", () => {
         makeResultFrame({ uuid: "after-mod-pane-result", result: "Done." }),
       );
       assert.equal((yield* Queue.take(harness.terminalReceipts)).status, "completed");
+    }).pipe(
+      Effect.provide(
+        Layer.mergeAll(
+          IdAllocator.layer,
+          McpProviderSessions.layer,
+          NodeServices.layer,
+          NodeCrypto.layer,
+        ),
+      ),
+    ),
+  );
+
+  it.effect("draws Claude mod panes and shows a focus request instead of failing the turn", () =>
+    Effect.gen(function* () {
+      const requests: Array<{ readonly subtype: string; readonly [key: string]: unknown }> = [];
+      let draws = 0;
+      const pane = (label: string, handle: number) => ({
+        type: "Box",
+        props: { flexDirection: "column" },
+        hover: { backgroundColor: "subtle" },
+        children: [
+          { type: "Text", props: { dimColor: true }, children: [label] },
+          {
+            type: "Button",
+            props: { key: "refresh", label: "Refresh" },
+            press: { plugin: "usage", handle },
+          },
+        ],
+      });
+      const harness = yield* makeWakeHarnessWithOptions({
+        uiRequest: (request) =>
+          Effect.sync(() => {
+            requests.push(request);
+            switch (request.subtype) {
+              case "ui_attach":
+                return { surfaces: ["desktop"] };
+              case "ui_panes":
+                return {
+                  panes: [{ id: "usage", title: "Usage", plugin: "usage", columns: 50 }],
+                  shown_id: "usage",
+                  focused_id: null,
+                  focus_requested_id: null,
+                };
+              case "ui_render":
+                draws++;
+                return { tree: pane(`draw ${draws}`, draws), props: {}, hooked: true };
+              case "ui_press":
+                return {
+                  handled: true,
+                  element: "refresh",
+                  drawn: { tree: pane("pressed", 99), props: {}, hooked: true },
+                };
+              default:
+                return {};
+            }
+          }),
+      });
+      const latest = () =>
+        harness.events.findLast(
+          (
+            event,
+          ): event is Extract<
+            ProviderAdapter.ProviderAdapterV2Event,
+            { type: "claude_mods.updated" }
+          > => event.type === "claude_mods.updated",
+        )?.state;
+      const label = () => {
+        const text = latest()?.trees["usage"]?.children?.[0];
+        return typeof text === "object" ? text.children?.[0] : undefined;
+      };
+      yield* harness.runtime.startTurn(
+        makeClaudeTestTurnInput({
+          threadId: harness.threadId,
+          providerThread: harness.providerThread,
+          now: yield* DateTime.now,
+          attemptId: RunAttemptId.make("attempt-claude-mod-surface"),
+          text: "Show usage",
+          attachments: [],
+        }),
+      );
+      yield* harness.offerAndWait(
+        claudeSdkFrame({
+          type: "system",
+          subtype: "init",
+          capabilities: ["ui_surface_v1"],
+          uuid: "00000000-0000-4000-8000-0000000007c0",
+          session_id: WAKE_NATIVE_SESSION,
+        }),
+      );
+      yield* harness.until(() => label() === "draw 1");
+      assert.deepEqual(
+        requests.map((request) => request.subtype),
+        ["ui_attach", "ui_panes", "ui_render"],
+      );
+      assert.deepInclude(requests[0], { surface: "desktop", client_id: "t3", answers: [] });
+      assert.deepInclude(requests[2], { component: "Pane", instance_id: "usage" });
+      assert.deepInclude(latest(), {
+        panes: [{ id: "usage", title: "Usage", plugin: "usage" }],
+        shownId: "usage",
+        focusRequestedId: null,
+      });
+      // Only the wire shape the contract names reaches clients.
+      assert.isUndefined(Reflect.get(latest()?.trees["usage"] ?? {}, "hover"));
+
+      yield* harness.offerAndWait(
+        claudeSdkFrame({
+          type: "system",
+          subtype: "ui_invalidate",
+          event: "ui.render",
+          instances: [{ surface: "desktop", component: "Pane", instance_id: "usage" }],
+          uuid: "00000000-0000-4000-8000-0000000007c1",
+          session_id: WAKE_NATIVE_SESSION,
+        }),
+      );
+      yield* harness.until(() => label() === "draw 2");
+
+      const claudeMods = harness.runtime.claudeMods;
+      if (claudeMods === undefined) throw new Error("Claude sessions must expose claudeMods.");
+      yield* claudeMods.act({
+        providerThread: harness.providerThread,
+        action: {
+          type: "press",
+          paneId: "usage",
+          press: { plugin: "usage", handle: 2 },
+          key: "refresh",
+        },
+      });
+      yield* harness.until(() => label() === "pressed");
+      assert.deepInclude(requests.at(-1), { subtype: "ui_press", handle: 2, key: "refresh" });
+      assert.deepInclude(Reflect.get(requests.at(-1) ?? {}, "render"), { instance_id: "usage" });
+
+      yield* harness.offerAndWait(
+        claudeSdkFrame({
+          type: "system",
+          subtype: "ui_toast",
+          plugin: "usage",
+          text: "Refreshed",
+          timeout_ms: 2000,
+          uuid: "00000000-0000-4000-8000-0000000007c2",
+          session_id: WAKE_NATIVE_SESSION,
+        }),
+      );
+      yield* harness.offerAndWait(
+        claudeSdkFrame({
+          type: "system",
+          subtype: "ui_status",
+          plugin: "usage",
+          text: "42% used",
+          uuid: "00000000-0000-4000-8000-0000000007c3",
+          session_id: WAKE_NATIVE_SESSION,
+        }),
+      );
+      yield* harness.until(() => (latest()?.statuses.length ?? 0) > 0);
+      assert.deepInclude(latest(), {
+        toasts: [{ seq: 1, plugin: "usage", text: "Refreshed", timeoutMs: 2000 }],
+        statuses: [{ plugin: "usage", text: "42% used" }],
+      });
+
+      // With the surface attached, a mod waiting on its pane is shown, not failed.
+      yield* harness.offerAndWait(
+        claudeSdkFrame({
+          type: "system",
+          subtype: "ui_panes",
+          panes: [{ id: "usage", title: "Usage", plugin: "usage" }],
+          shown_id: "usage",
+          focused_id: null,
+          focus_requested_id: "usage",
+          uuid: "00000000-0000-4000-8000-0000000007c4",
+          session_id: WAKE_NATIVE_SESSION,
+        }),
+      );
+      yield* harness.until(() => latest()?.focusRequestedId === "usage");
+      yield* harness.offerAndWait(
+        makeResultFrame({ uuid: "00000000-0000-4000-8000-0000000007c5", result: "Done." }),
+      );
+      assert.equal((yield* Queue.take(harness.terminalReceipts)).status, "completed");
+      assert.equal(draws, 2, "an unchanged roster must not redraw its panes");
     }).pipe(
       Effect.provide(
         Layer.mergeAll(

@@ -1,8 +1,13 @@
-import type { OrchestrationV2HistoricalMessage } from "@t3tools/contracts";
+import type {
+  ClaudeModAction,
+  ClaudeModRequestError,
+  OrchestrationV2HistoricalMessage,
+} from "@t3tools/contracts";
 import {
   type AgentFeedbackMode,
   ChatAttachment,
   CheckpointId,
+  ClaudeModUiState,
   MessageId,
   ModelSelection,
   NodeId,
@@ -201,6 +206,13 @@ export const ProviderAdapterV2Event = Schema.Union([
     threadId: ThreadId,
     runId: RunId,
     text: Schema.String,
+  }),
+  /** Unpersisted mod UI of the thread's live Claude CLI; empty once that process ends. */
+  Schema.Struct({
+    type: Schema.Literal("claude_mods.updated"),
+    driver: ProviderDriverKind,
+    threadId: ThreadId,
+    state: ClaudeModUiState,
   }),
   Schema.Struct({
     type: Schema.Literal("runtime_request.updated"),
@@ -734,6 +746,14 @@ export interface ProviderAdapterV2McpApps {
   }) => Effect.Effect<{ readonly contents: ReadonlyArray<unknown> }, ProviderAdapterV2Error>;
 }
 
+/** Drives the panes Claude Code mods draw; see `claude_mods.updated` for what they show. */
+export interface ProviderAdapterV2ClaudeMods {
+  readonly act: (input: {
+    readonly providerThread: OrchestrationV2ProviderThread;
+    readonly action: ClaudeModAction;
+  }) => Effect.Effect<void, ClaudeModRequestError>;
+}
+
 /**
  * Signs one of the session's MCP servers in. `start` returns the page to approve
  * on; `complete` takes the address the browser was sent back to afterwards,
@@ -869,6 +889,8 @@ export interface ProviderAdapterV2SessionRuntime {
   readonly mcpApps?: ProviderAdapterV2McpApps;
   /** Absent when the agent has no way to sign an MCP server in. */
   readonly mcpSignIn?: ProviderAdapterV2McpSignIn;
+  /** Present only on Claude sessions. */
+  readonly claudeMods?: ProviderAdapterV2ClaudeMods;
   readonly rollbackThread: (
     input: ProviderAdapterV2RollbackThreadInput,
   ) => Effect.Effect<ProviderAdapterV2ThreadSnapshot, ProviderAdapterV2Error>;

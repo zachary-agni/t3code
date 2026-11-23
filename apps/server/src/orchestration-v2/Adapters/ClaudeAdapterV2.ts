@@ -7,6 +7,11 @@ import {
 import { makeProviderTextDeltaCoalescer } from "./ProviderTextDeltaCoalescer.ts";
 import { claudeTaskOutputRoot, tailClaudeTaskOutput } from "./ClaudeTaskOutputTail.ts";
 import {
+  makeClaudeModSurface,
+  type ClaudeModSurface,
+  type ClaudeUiRequest,
+} from "./ClaudeModSurface.ts";
+import {
   dynamicToolTitle,
   formatReadToolLabel,
   formatSearchToolLabel,
@@ -97,6 +102,7 @@ import {
   type AgentFeedbackMode,
   type ChatAttachment,
   PROVIDER_SEND_TURN_MAX_FILE_BYTES,
+  ClaudeModRequestError,
   ClaudeSettings,
   TrimmedNonEmptyString,
   defaultInstanceIdForDriver,
@@ -829,6 +835,10 @@ export interface ClaudeAgentSdkQuerySession {
   >;
   readonly interrupt: Effect.Effect<void, ClaudeAgentSdkQueryRunnerError>;
   readonly close: Effect.Effect<void, ClaudeAgentSdkQueryRunnerError>;
+  /** Mod remote-UI requests; absent means the session draws no mod panes. */
+  readonly uiRequest?: (
+    request: ClaudeUiRequest,
+  ) => Effect.Effect<unknown, ClaudeAgentSdkQueryRunnerError>;
 }
 
 type ClaudeQueryStreamExit = Exit.Exit<void, ClaudeAgentSdkQueryRunnerError>;
@@ -1040,7 +1050,8 @@ async function sendClaudeControlRequest(
       | "list_permission_rules"
       | "rename_session"
       | "mcp_authenticate"
-      | "mcp_oauth_callback_url";
+      | "mcp_oauth_callback_url"
+      | ClaudeUiRequest["subtype"];
     readonly [key: string]: unknown;
   },
 ): Promise<unknown> {
@@ -2158,6 +2169,11 @@ export const layerQueryRunner: Layer.Layer<
               }),
             catch: (cause) => queryRunnerError(cause, "callMcpTool"),
           }),
+        uiRequest: (request) =>
+          Effect.tryPromise({
+            try: () => sendClaudeControlRequest(queryRuntime, request),
+            catch: (cause) => queryRunnerError(cause, request.subtype),
+          }),
         listPermissionRules: Effect.tryPromise({
           try: () => sendClaudeControlRequest(queryRuntime, { subtype: "list_permission_rules" }),
           catch: (cause) => queryRunnerError(cause, "listPermissionRules"),
@@ -2466,6 +2482,8 @@ export function makeClaudeQueryOptions(input: {
   readonly workspace?: ProviderAdapter.ProviderAdapterV2RuntimePolicy["workspace"];
   readonly attachmentsDir?: string;
   readonly settings?: ClaudeSettings;
+  /** Mod folders from `settings.mods` that still exist. */
+  readonly mods?: ReadonlyArray<string>;
   readonly promptSuggestions?: boolean;
   readonly sdkSettings?: string | ClaudeSdkSettings;
   readonly environment?: NodeJS.ProcessEnv;
@@ -2516,8 +2534,14 @@ export function makeClaudeQueryOptions(input: {
   if (requestThinkingSummaries && extraArgs["thinking-display"] === undefined) {
     extraArgs["thinking-display"] = "summarized";
   }
-  const pluginDirectories =
-    input.settings === undefined ? [] : claudeLaunchArgPluginDirectories(input.settings.launchArgs);
+  const pluginDirectories = [
+    ...new Set([
+      ...(input.settings === undefined
+        ? []
+        : claudeLaunchArgPluginDirectories(input.settings.launchArgs)),
+      ...(input.mods ?? []),
+    ]),
+  ];
   // A bare --plugin-dir still reaches Claude, which reports the missing path.
   if (launchArgPluginDir === null) extraArgs["plugin-dir"] = null;
   const threadIdentity: ClaudeAgentSdkThreadIdentity = input.resume
@@ -5490,6 +5514,7 @@ interface ClaudeLiveQueryContext {
   checkMcpSignIns: boolean;
   // From system/init; feature-detects control requests such as MCP Apps.
   capabilities: ReadonlySet<string>;
+  readonly modSurface: ClaudeModSurface;
   claudeCodeVersion: string | undefined;
   permissionMode: PermissionMode;
   stopping: boolean;
@@ -6244,6 +6269,13 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
         const interruptedTurns = yield* Ref.make(new Set<OrchestrationV2ProviderTurn["id"]>());
         const steeredTurns = yield* Ref.make(new Set<OrchestrationV2ProviderTurn["id"]>());
         const queryContext = yield* Ref.make<ClaudeLiveQueryContext | null>(null);
+        // A deleted mod folder stays enabled in settings; Claude would report it as a broken plugin.
+        const existingClaudeMods = Effect.forEach(adapterOptions.settings.mods, (directory) =>
+          fileSystem.exists(directory).pipe(
+            Effect.orElseSucceed(() => false),
+            Effect.map((exists) => (exists ? [directory] : [])),
+          ),
+        ).pipe(Effect.map((found) => found.flat()));
         // Wake buffers replay result frames, so ledger growth is measured once on arrival.
         const resultLedgerUsage = new WeakMap<SDKMessage, ClaudeLedgerUsage>();
         const resultsReportingNewContextWindow = new WeakSet<SDKMessage>();
@@ -11214,7 +11246,10 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
               yield* clearUnansweredRequestWatch(context);
             }
           }
-          const focusedPlugin = claudeFocusRequestedPanePlugin(message);
+          // An attached surface shows the pane; only a CLI T3 cannot draw for fails the turn.
+          const focusedPlugin = liveQuery.modSurface.isAttached()
+            ? null
+            : claudeFocusRequestedPanePlugin(message);
           if (focusedPlugin !== null && context === (yield* Ref.get(activeTurn))) {
             yield* Effect.logWarning("orchestration-v2.claude-mod-pane-focus-unsupported", {
               providerTurnId: context.providerTurnId,
@@ -13595,6 +13630,7 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
               : { workspace: turnInput.runtimePolicy.workspace }),
             attachmentsDir,
             settings: adapterOptions.settings,
+            mods: yield* existingClaudeMods,
             // Delegated threads have no one typing, so they never ask for suggestions.
             promptSuggestions:
               !isDelegatedAppThread(turnInput.appThread) && (yield* promptSuggestionsEnabled),
@@ -13699,6 +13735,20 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
             receivedInit: false,
             checkMcpSignIns: false,
             capabilities: new Set(),
+            modSurface: makeClaudeModSurface({
+              request: querySession.uiRequest,
+              publish: (state) =>
+                emitProviderEvent({
+                  type: "claude_mods.updated",
+                  driver: CLAUDE_PROVIDER,
+                  threadId: turnInput.threadId,
+                  state,
+                }),
+              isCurrent: Ref.get(queryContext).pipe(
+                Effect.map((current) => current?.query === querySession),
+              ),
+              scope: sessionScope,
+            }),
             claudeCodeVersion: undefined,
             permissionMode: queryOptions.permissionMode,
             stopping: false,
@@ -13735,6 +13785,7 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
               sdkMessageLock.withPermits(1)(
                 Effect.suspend(() => {
                   let firstInit = false;
+                  let initCapabilities: ReadonlyArray<string> | undefined;
                   if (
                     (message.type === "assistant" || message.type === "user") &&
                     message.parent_tool_use_id === null &&
@@ -13752,6 +13803,7 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
                       message.permissionMode ?? context.openedPermissionMode;
                     context.receivedInit = true;
                     context.capabilities = new Set(message.capabilities ?? []);
+                    initCapabilities = message.capabilities;
                     context.claudeCodeVersion = message.claude_code_version;
                   }
                   if (message.type === "system" && message.subtype === "init") {
@@ -13795,7 +13847,15 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
                       resultsReportingNewContextWindow.add(message);
                     }
                   }
-                  const handled = handleSdkMessage({ query: querySession, message });
+                  // Mod UI frames go to the surface here, once: turn routing can buffer and replay frames.
+                  const handled = context.modSurface
+                    .handleFrame(message)
+                    .pipe(
+                      Effect.andThen(
+                        firstInit ? context.modSurface.start(initCapabilities) : Effect.void,
+                      ),
+                      Effect.andThen(handleSdkMessage({ query: querySession, message })),
+                    );
                   const reportedCwd = turnInput.runtimePolicy.cwd;
                   if (!firstInit || reportedCwd === null || !adapterOptions.onSessionInit) {
                     return handled;
@@ -13825,6 +13885,7 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
                   current?.query === querySession ? [true, null] : [false, current],
                 );
                 if (ownsLiveQuery) {
+                  yield* context.modSurface.clear;
                   yield* finalizeActiveTurnAfterQueryExit(
                     context,
                     exit._tag === "Failure" ? exit.cause : undefined,
@@ -15016,6 +15077,22 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
             }
             yield* applySessionTitle(live.query, live.nativeThreadId, title);
           }),
+          claudeMods: {
+            act: Effect.fn("ClaudeAdapterV2.claudeMods.act")(function* ({
+              providerThread,
+              action,
+            }) {
+              const live = yield* Ref.get(queryContext);
+              if (
+                live === null ||
+                live.stopping ||
+                live.nativeThreadId !== providerThread.nativeThreadRef?.nativeId
+              ) {
+                return yield* new ClaudeModRequestError({ reason: "session-stopped" });
+              }
+              return yield* live.modSurface.act(action);
+            }),
+          },
           mcpSignIn: {
             start: Effect.fn("ClaudeAdapterV2.mcpSignIn.start")(function* ({
               providerThread,
